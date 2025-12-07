@@ -1,4 +1,12 @@
-# ga_optimizer.py
+# ml_strategy/ga_optimizer.py
+import sys
+import os
+
+# 루트 경로 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(current_dir)
+sys.path.append(root_dir)
+
 import numpy as np
 import random
 import config

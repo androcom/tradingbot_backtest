@@ -1,27 +1,37 @@
-# main_backtest.py
+# ml_strategy/run_phase1_ml.py
+import sys
+import os
+
+# 루트 경로 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(current_dir)
+sys.path.append(root_dir)
+
 import pandas as pd
 import numpy as np
 from datetime import timedelta
 import logging
-import os
 import matplotlib.pyplot as plt 
-import config
-from data_processor import DataProcessor
-from ai_models import HybridEnsemble
-from trading_engine import AccountManager
+import config # 루트 모듈
+from data_processor import DataProcessor # 루트 모듈
+from trading_engine import AccountManager # 루트 모듈
+from ml_strategy.ai_models import HybridEnsemble 
+from ml_strategy.ga_optimizer import GeneticOptimizer
 from sklearn.preprocessing import RobustScaler
-from ga_optimizer import GeneticOptimizer
 
+# 로거 설정
 logger = logging.getLogger("BacktestLogger")
 logger.setLevel(logging.DEBUG)
 logger.propagate = False 
 if not os.path.exists(config.LOG_DIR): os.makedirs(config.LOG_DIR)
-file_handler = logging.FileHandler(config.LOG_FILE, mode='w', encoding='utf-8')
-file_handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-logger.addHandler(file_handler)
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter('%(message)s'))
-logger.addHandler(console_handler)
+# 파일 핸들러 중복 방지
+if not logger.handlers:
+    file_handler = logging.FileHandler(config.LOG_FILE, mode='w', encoding='utf-8')
+    file_handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+    logger.addHandler(file_handler)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter('%(message)s'))
+    logger.addHandler(console_handler)
 
 def plot_results(df_result, symbol):
     if df_result.empty: return
@@ -50,7 +60,7 @@ def plot_results(df_result, symbol):
     plt.close()
 
 def run_strategy(symbol):
-    logger.info(f"\n{'='*60}\n>> STARTING PHASE-1 STABLE STRATEGY: {symbol}\n{'='*60}")
+    logger.info(f"\n{'='*60}\n>> STARTING PHASE-1 STABLE STRATEGY (Teacher Generation): {symbol}\n{'='*60}")
 
     dp = DataProcessor(symbol)
     full_df = dp.prepare_multi_timeframe_data()
@@ -74,6 +84,7 @@ def run_strategy(symbol):
     account = AccountManager(balance=config.INITIAL_BALANCE, leverage=1)
     equity_curve = [{'time': current_test_start, 'balance': config.INITIAL_BALANCE}]
     
+    # 안정형 초기 파라미터
     current_params = {
         'entry_threshold': 0.6, 'sl_mul': 3.0, 'risk_scale': 0.01, 'tp_ratio': 2.0
     }
@@ -105,16 +116,17 @@ def run_strategy(symbol):
         df_train_scaled.fillna(0, inplace=True)
         df_test_scaled.fillna(0, inplace=True)
 
-        # C. AI 모델 학습 및 저장
+        # C. AI 모델 학습
         X_train_seq, y_train_seq = dp.create_sequences(df_train_scaled, features, config.LSTM_WINDOW)
         X_train_flat = df_train_scaled.iloc[config.LSTM_WINDOW:][features].values
         y_train_flat = df_train_scaled.iloc[config.LSTM_WINDOW:]['target_cls'].values
         
         logger.info("   [AI] Training Model...")
         model.train(X_train_seq, y_train_seq, X_train_flat, y_train_flat)
+        # [중요] 학습된 모델 저장 (RL의 해설지로 사용됨)
         model.save_models()
         
-        # D. GA 최적화
+        # D. GA 파라미터 최적화
         train_ai_scores = model.batch_predict(X_train_seq, X_train_flat)
         logger.info("   [GA] Optimizing Parameters...")
         best_params = optimizer.optimize(
@@ -124,7 +136,7 @@ def run_strategy(symbol):
         current_params = best_params
         logger.info(f"   [GA] Best: Th={best_params['entry_threshold']:.2f}, SL={best_params['sl_mul']:.1f}, Risk={best_params['risk_scale']:.3f}")
 
-        # E. 백테스트
+        # E. 백테스트 실행
         X_test_seq, _ = dp.create_sequences(
             pd.concat([df_train_scaled.iloc[-config.LSTM_WINDOW:], df_test_scaled]), 
             features, 
@@ -156,7 +168,7 @@ def run_strategy(symbol):
 
             signal = 'HOLD'
             
-            # [수정] 안정형 전략: Super Trend Guard + Strict Reversal
+            # [안정형 전략 복원: Super Trend Guard]
             is_volume_supported = current_rvol > config.RVOL_THRESHOLD
 
             if current_bb_w > config.BB_WIDTH_THRESHOLD:
@@ -174,7 +186,7 @@ def run_strategy(symbol):
                 
                 # Range Mode (Super Trend일 땐 역추세 금지)
                 elif not is_super_trend:
-                    is_oversold = current_rsi < 25 # 엄격
+                    is_oversold = current_rsi < 25
                     is_overbought = current_rsi > 75
                     
                     if is_oversold and score > current_params['entry_threshold']: signal = 'OPEN_LONG'
@@ -223,6 +235,10 @@ def run_strategy(symbol):
     total_ret = ((final_bal - config.INITIAL_BALANCE) / config.INITIAL_BALANCE) * 100
     logger.info(f"Final Balance: {final_bal:.2f} ({total_ret:+.2f}%)")
 
-if __name__ == "__main__":
+# 외부 호출을 위한 main 함수
+def main():
     for s in config.TARGET_SYMBOLS:
         run_strategy(s)
+
+if __name__ == "__main__":
+    main()

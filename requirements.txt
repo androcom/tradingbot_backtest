@@ -1,3 +1,4 @@
+# Core Libraries
 pandas
 numpy<2.0
 numba
@@ -6,6 +7,16 @@ matplotlib
 ccxt
 ta
 tensorflow<2.11
-xgboost
-scikit-learn
 joblib
+scikit-learn
+xgboost
+
+# PyTorch (CUDA 11.2/11.3 Compatible)
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch==1.12.1+cu113
+
+# Reinforcement Learning (Compatible with Torch 1.12)
+stable-baselines3==2.0.0
+gymnasium==0.28.1
+shimmy>=0.2.1
+tensorboard

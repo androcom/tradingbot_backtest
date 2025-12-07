@@ -193,3 +193,7 @@ pip-selfcheck.json
 *.h5
 *.pkl
 *.parquet
+
+data/
+logs/
+models/
