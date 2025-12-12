@@ -3,12 +3,10 @@ import multiprocessing
 from datetime import datetime
 
 # ---------------------------------------------------------
-# [System] 하드웨어 및 시스템 자동 설정 (중앙 제어)
+# [System] 하드웨어 및 시스템 자동 설정
 # ---------------------------------------------------------
 def get_optimal_cpu_cores():
     try:
-        # 전체 코어의 80% 정도만 사용 (OS 안정성 위해 여유 둠)
-        # 최소 2개, 최대 전체-1개
         cores = multiprocessing.cpu_count()
         return max(2, cores - 1) 
     except:
@@ -17,25 +15,24 @@ def get_optimal_cpu_cores():
 DETECTED_CORES = get_optimal_cpu_cores()
 
 SYSTEM = {
-    # 1. 메인 학습(Main)용 장치 설정
-    'MAIN_ML_DEVICE': 'cuda',      # XGBoost/LSTM
-    'MAIN_RL_DEVICE': 'cuda',      # PPO
-
-    # 2. 최적화(Optimization)용 장치 설정
+    'MAIN_ML_DEVICE': 'cuda',      
+    'MAIN_RL_DEVICE': 'cuda',      
     'OPT_TEACHER_DEVICE': 'cuda',
-    'OPT_LOGIC_DEVICE': 'cuda',
-
-    # 3. 병렬 프로세스 개수 (Optuna n_jobs)
+    'OPT_LOGIC_DEVICE': 'cpu',
     'NUM_WORKERS': DETECTED_CORES, 
-    
-    # 4. 기타
-    'SUPPRESS_WARNINGS': True       # 경고 메시지 차단
+    'SUPPRESS_WARNINGS': True       
 }
 
 # ---------------------------------------------------------
-# [Path] 경로 설정
+# [Path] 경로 설정 (수정됨)
 # ---------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 1. 현재 파일(config.py)이 있는 위치: .../tradingbot/core
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 2. 프로젝트 루트 경로: .../tradingbot (한 단계 위로 이동)
+BASE_DIR = os.path.dirname(CURRENT_DIR)
+
+# 3. 하위 폴더 설정 (이제 루트 기준으로 생성됨)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 LOG_BASE_DIR = os.path.join(BASE_DIR, 'logs')
 MODEL_BASE_DIR = os.path.join(BASE_DIR, 'models_saved')
@@ -47,7 +44,7 @@ class SessionManager:
     def __init__(self):
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_dir = os.path.join(LOG_BASE_DIR, self.session_id)
-        self.model_dir = os.path.join(MODEL_BASE_DIR, self.session_id)
+        self.model_dir = os.path.join(MODEL_BASE_DIR, self.session_id) # 학습된 모델은 여기 저장됨
         self.tensorboard_dir = os.path.join(self.log_dir, "tb_logs")
 
     def create(self):
@@ -84,38 +81,46 @@ EXCLUDE_COLS = [
 # ---------------------------------------------------------
 # [Feature] 지표 및 타겟
 # ---------------------------------------------------------
-INDICATOR_WINDOW = 75          
+INDICATOR_WINDOW = 12
 LOOK_AHEAD_STEPS = 1           
-TARGET_THRESHOLD = 0.00373     
+TARGET_THRESHOLD = 0.005     
 
 # ---------------------------------------------------------
 # [Model] 모델 하이퍼파라미터
 # ---------------------------------------------------------
-# XGBoost: device 설정은 호출하는 쪽에서 config.SYSTEM을 참조하여 주입
 XGB_PARAMS = {
     'n_estimators': 250,
-    'max_depth': 3,
-    'learning_rate': 0.0565,
+    'max_depth': 7,
+    'learning_rate': 0.030,
     'n_jobs': -1,
     'random_state': 42,
     'eval_metric': 'mlogloss',
 }
 
-# LSTM
-ML_SEQ_LEN = 60
-ML_EPOCHS = 150
-ML_BATCH_SIZE = 256
 LSTM_PARAMS = {
-    'units_1': 64,
-    'units_2': 32,
-    'dropout': 0.3
+    'units_1': 32,
+    'units_2': 48,
+    'dropout': 0.125
 }
 
-# PPO
+ML_SEQ_LEN = 60
+ML_EPOCHS = 150
+ML_BATCH_SIZE = 1024
+
+# [RL Reward Params] - Phase 3 최적화 결과 (2025-12-11 업데이트)
+REWARD_PARAMS = {
+    'profit_scale': 100,
+    'teacher_bonus': 0.086,
+    'teacher_penalty': 0.132,
+    'mdd_penalty_factor': 0.503,
+    'new_high_bonus': 0.380
+}
+
+# [RL PPO Params]
 RL_TOTAL_TIMESTEPS = 10_000_000 
 RL_PPO_PARAMS = {
-    'learning_rate': 2e-4,
-    'n_steps': 2048,
+    'learning_rate': 1.74e-5, # 최적화된 값
+    'n_steps': 4096,
     'batch_size': 2048,
     'n_epochs': 10,
     'gamma': 0.99,
@@ -128,10 +133,10 @@ RL_PPO_PARAMS = {
 }
 
 # ---------------------------------------------------------
-# [Trading] 거래 규칙
+# [Trading] 거래 규칙 (Logic Optimization 대상)
 # ---------------------------------------------------------
 INITIAL_BALANCE = 10000.0
-MAX_LEVERAGE = 5 
+MAX_LEVERAGE = 20
 FEE_RATE = 0.0006
 SLIPPAGE = 0.0002
 

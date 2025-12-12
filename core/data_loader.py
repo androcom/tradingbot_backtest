@@ -1,15 +1,24 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core import config
+
 import pandas as pd
 import numpy as np
 import ccxt
 import ta
-import os
 import time
 import logging
-import config
 
 class DataLoader:
     def __init__(self, logger=None):
-        self.exchange = ccxt.binance()
+        # [수정됨] Binance Futures(선물) API 연결 설정
+        self.exchange = ccxt.binance({
+            'enableRateLimit': True,
+            'options': {
+                'defaultType': 'future'  # 'spot' -> 'future'로 변경
+            }
+        })
         self.logger = logger if logger else logging.getLogger()
 
     def log(self, msg):
@@ -19,9 +28,8 @@ class DataLoader:
         """특정 타임스탬프 구간(ms) 데이터 다운로드"""
         all_ohlcv = []
         since = start_ts
-        limit = 1000
+        limit = 1000 # 바이낸스 선물은 1500까지 가능하나 안정성을 위해 1000 유지
         
-        # 미래 시간 요청 방지
         current_server_time = self.exchange.milliseconds()
         if end_ts > current_server_time:
             end_ts = current_server_time
@@ -36,6 +44,7 @@ class DataLoader:
                     
                 since = last_fetched_ts + 1
                 all_ohlcv.extend(ohlcv)
+                # Rate Limit 준수
                 time.sleep(self.exchange.rateLimit / 1000)
                 
             except Exception as e:
@@ -48,14 +57,15 @@ class DataLoader:
         df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df.set_index('timestamp', inplace=True)
+        # 중복 제거
         df = df[~df.index.duplicated(keep='last')]
         df.sort_index(inplace=True)
         return df
 
     def fetch_data(self, symbol, timeframe, start_str, end_str):
-        """로컬 파일 확인 -> 앞/뒤 부족분 다운로드 -> 병합 -> 저장"""
+        # 파일명에 '_future'를 붙여 기존 현물 데이터와 구분 (선택 사항이나 안전을 위해 권장)
         safe_symbol = symbol.replace('/', '_')
-        file_path = os.path.join(config.DATA_DIR, f"{safe_symbol}_{timeframe}.parquet")
+        file_path = os.path.join(config.DATA_DIR, f"{safe_symbol}_{timeframe}_future.parquet")
         
         req_start_dt = pd.to_datetime(start_str)
         req_end_dt = pd.to_datetime(end_str)
@@ -81,7 +91,7 @@ class DataLoader:
         is_updated = False
 
         if not file_exists:
-            self.log(f"[Data] No local file. Downloading {symbol} ({timeframe}) full range...")
+            self.log(f"[Data] Downloading {symbol} ({timeframe}) FUTURES data...")
             new_df = self._download_range(symbol, timeframe, req_start_ts, req_end_ts)
             if not new_df.empty:
                 dfs_to_concat.append(new_df)
@@ -92,9 +102,9 @@ class DataLoader:
             local_start_ts = int(local_start_dt.timestamp() * 1000)
             local_end_ts = int(local_end_dt.timestamp() * 1000)
 
-            # Head (앞부분) 부족 시
+            # Head 부족
             if req_start_dt < local_start_dt - pd.Timedelta(hours=1):
-                self.log(f"[Data] Missing HEAD. Downloading {symbol} ({timeframe}) {req_start_dt} ~ {local_start_dt}...")
+                self.log(f"[Data] Fetching Missing Head...")
                 head_df = self._download_range(symbol, timeframe, req_start_ts, local_start_ts)
                 if not head_df.empty:
                     dfs_to_concat.append(head_df)
@@ -102,9 +112,9 @@ class DataLoader:
 
             dfs_to_concat.append(df)
 
-            # Tail (뒷부분) 부족 시
+            # Tail 부족
             if req_end_dt > local_end_dt + pd.Timedelta(hours=1):
-                self.log(f"[Data] Missing TAIL. Downloading {symbol} ({timeframe}) {local_end_dt} ~ {req_end_dt}...")
+                self.log(f"[Data] Fetching Missing Tail...")
                 tail_df = self._download_range(symbol, timeframe, local_end_ts + 1, req_end_ts)
                 if not tail_df.empty:
                     dfs_to_concat.append(tail_df)
@@ -115,7 +125,7 @@ class DataLoader:
             full_df = pd.concat(dfs_to_concat)
             full_df = full_df[~full_df.index.duplicated(keep='last')].sort_index()
             full_df.to_parquet(file_path)
-            self.log(f"[Data] Update complete. Saved to {file_path} (Rows: {len(full_df)})")
+            self.log(f"[Data] Saved to {file_path} (Rows: {len(full_df)})")
             df = full_df
         
         if df.empty: return df
@@ -124,14 +134,13 @@ class DataLoader:
         mask = (df.index >= req_start_dt) & (df.index <= req_end_dt)
         return df.loc[mask]
 
+    # ... (나머지 지표 추가 로직은 동일하므로 생략, 위 코드 그대로 사용)
     def _add_technical_indicators(self, df, window, suffix=''):
         if df.empty: return df
         df = df.copy()
-        
         trend_win = config.TRADING_RULES['trend_window']
         ema = ta.trend.EMAIndicator(df['close'], window=trend_win)
         df[f'ema_trend{suffix}'] = ema.ema_indicator()
-        
         df[f'rsi{suffix}'] = ta.momentum.RSIIndicator(df['close'], window=window).rsi()
         df[f'atr{suffix}'] = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'], window=window).average_true_range()
         macd = ta.trend.MACD(df['close'])
@@ -148,7 +157,6 @@ class DataLoader:
     def get_ml_data(self, symbol=config.MAIN_SYMBOL):
         df_main = self.fetch_data(symbol, config.TIMEFRAME_MAIN, config.DATE_START, config.DATE_END)
         if df_main.empty: return df_main
-        
         df_main = self._add_technical_indicators(df_main, config.INDICATOR_WINDOW, suffix='')
         
         df_aux = self.fetch_data(symbol, config.TIMEFRAME_AUX, config.DATE_START, config.DATE_END)
@@ -178,9 +186,6 @@ class DataLoader:
         df['target_val'] = future_ret
         df.dropna(subset=['target_cls', 'target_val'], inplace=True)
         df['target_cls'] = df['target_cls'].astype(int)
-        
-        dist = df['target_cls'].value_counts(normalize=True).sort_index()
-        self.log(f"\n[Target Distribution] 0(Short): {dist.get(0, 0):.1%}, 1(Hold): {dist.get(1, 0):.1%}, 2(Long): {dist.get(2, 0):.1%}")
         return df
     
     def get_precision_data(self, symbol=config.MAIN_SYMBOL):
