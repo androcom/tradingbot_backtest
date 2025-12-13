@@ -4,9 +4,12 @@ import logging
 import joblib 
 import numpy as np
 import pandas as pd
+import subprocess
+import atexit
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+# [1] 시스템 로그 차단 및 경로 설정
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
@@ -23,13 +26,40 @@ from sklearn.model_selection import TimeSeriesSplit
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
+from stable_baselines3.common.monitor import Monitor  # [필수] 텐서보드용 데이터 수집기
 
-# [가속화] TensorFlow Mixed Precision 적용
 from tensorflow.keras import mixed_precision # type: ignore
 mixed_precision.set_global_policy('mixed_float16')
 
 utils.silence_noisy_loggers()
 
+# --------------------------------------------------------------------------
+# [Helper] TensorBoard 자동 실행 함수 (0.0.0.0 바인딩)
+# --------------------------------------------------------------------------
+def launch_tensorboard_background(log_dir, port=6006):
+    """
+    TensorBoard를 백그라운드 서브프로세스로 실행합니다.
+    - host 0.0.0.0: 외부(Tailscale 등) 접속 허용
+    - no browser: VSCode 자동 감지 유도 및 팝업 방지
+    """
+    try:
+        cmd = [
+            "tensorboard",
+            "--logdir", log_dir,
+            "--host", "0.0.0.0",
+            "--port", str(port)
+        ]
+        # 로그는 버리고 백그라운드 실행
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"📊 TensorBoard Running: http://localhost:{port} (Accessible via Tailscale IP)")
+        return proc
+    except Exception as e:
+        print(f"⚠️ Failed to launch TensorBoard: {e}")
+        return None
+
+# --------------------------------------------------------------------------
+# [Callback] RL 학습 진행상황 로깅
+# --------------------------------------------------------------------------
 class RLLoggingCallback(BaseCallback):
     def __init__(self, logger, verbose=0):
         super(RLLoggingCallback, self).__init__(verbose)
@@ -42,18 +72,21 @@ class RLLoggingCallback(BaseCallback):
         return True
 
     def _on_training_end(self) -> None:
+        # Monitor 래퍼가 있어야 ep_info_buffer가 채워짐
         if len(self.model.ep_info_buffer) > 0:
             rew = np.mean([ep['r'] for ep in self.model.ep_info_buffer])
             len_ = np.mean([ep['l'] for ep in self.model.ep_info_buffer])
             self.custom_logger.info(f"   [RL] Training END | Mean Ep_Reward: {rew:.2f} | Mean Ep_Len: {len_:.0f}")
 
+# --------------------------------------------------------------------------
+# [Main Class] 파이프라인 트레이너
+# --------------------------------------------------------------------------
 class PipelineTrainer:
     def __init__(self, session_paths):
         self.paths = session_paths
         self.logger = utils.get_logger("Trainer", log_file=os.path.join(session_paths['root'], 'trainer.log'))
         self.loader = DataLoader(self.logger)
         self.model_dir = self.paths['model']
-        # Scaler는 Loop 내부에서 매번 새로 생성하거나 fit 해야 함
         self.scaler = None 
 
     def log(self, msg):
@@ -79,7 +112,7 @@ class PipelineTrainer:
         
         feature_cols = [c for c in full_df.columns if c not in config.EXCLUDE_COLS]
         
-        # 2. Signals (Walk-Forward Validation) - [Strict Mode]
+        # 2. Signals (Strict Walk-Forward)
         self.log("[Phase 2] Generating ML Signals (Strict Walk-Forward)...")
         full_df['ml_signal'] = 0.0 
         
@@ -91,11 +124,9 @@ class PipelineTrainer:
             fold_train = train_df.iloc[tr_idx]
             fold_val = train_df.iloc[val_idx]
             
-            # [수정] Scaler Leakage 방지: Fold마다 Scaler를 새로 학습
             fold_scaler = RobustScaler()
             fold_scaler.fit(fold_train[feature_cols])
             
-            # Fold별 데이터 변환
             X_flat_tr, X_seq_tr, y_tr = self._prepare_ml_inputs(fold_train, feature_cols, fold_scaler, is_training=True)
             X_flat_val, X_seq_val, _ = self._prepare_ml_inputs(fold_val, feature_cols, fold_scaler, is_training=False)
             
@@ -106,39 +137,50 @@ class PipelineTrainer:
             
             signals = temp_model.predict_proba(X_flat_val, X_seq_val)
             
+            # [Net Signal 적용] Long(1) - Short(0)
             valid_len = len(signals)
             target_idx = fold_val.index[config.ML_SEQ_LEN : config.ML_SEQ_LEN + valid_len]
+            
             if not target_idx.empty:
-                 full_df.loc[target_idx, 'ml_signal'] = signals[:len(target_idx)]
+                if signals.ndim > 1:
+                    insert_values = signals[:len(target_idx), 1] - signals[:len(target_idx), 0]
+                else:
+                    insert_values = signals[:len(target_idx)]
+                    
+                full_df.loc[target_idx, 'ml_signal'] = insert_values
             
             fold += 1
             del temp_model
-            del fold_scaler # 메모리 해제
+            del fold_scaler
             import gc; gc.collect()
 
-        # 3. Final Training & Saving Scaler
+        # 3. Final Training
         self.log("[Phase 3] Final Training (All Train Data)...")
         
-        # 전체 Train 데이터로 Scaler 재학습 및 저장 (이게 최종 Scaler가 됨)
         self.scaler = RobustScaler()
         self.scaler.fit(train_df[feature_cols])
         scaler_path = os.path.join(self.model_dir, "scaler.pkl")
         joblib.dump(self.scaler, scaler_path)
         self.log("   - Scaler Saved.")
 
-        # 최종 모델 학습
         X_flat_all, X_seq_all, y_all = self._prepare_ml_inputs(train_df, feature_cols, self.scaler, is_training=True)
         final_model = HybridLearner(self.model_dir, self.logger)
         final_model.train(X_flat_all, y_all, X_seq_all, y_all)
         
-        # Test 데이터 예측
         X_flat_test, X_seq_test, _ = self._prepare_ml_inputs(test_df, feature_cols, self.scaler, is_training=False)
         test_signals = final_model.predict_proba(X_flat_test, X_seq_test)
         
+        # [Net Signal 적용] Final Test
         test_valid_len = len(test_signals)
         test_target_idx = test_df.index[config.ML_SEQ_LEN : config.ML_SEQ_LEN + test_valid_len]
+        
         if not test_target_idx.empty:
-            full_df.loc[test_target_idx, 'ml_signal'] = test_signals[:len(test_target_idx)]
+            if test_signals.ndim > 1:
+                insert_values = test_signals[:len(test_target_idx), 1] - test_signals[:len(test_target_idx), 0]
+            else:
+                insert_values = test_signals[:len(test_target_idx)]
+                
+            full_df.loc[test_target_idx, 'ml_signal'] = insert_values
 
         full_df['ml_signal'] = full_df['ml_signal'].fillna(0.0)
 
@@ -155,7 +197,6 @@ class PipelineTrainer:
         
         self.log("✅ PIPELINE FINISHED.")
 
-    # [수정] scaler를 인자로 받도록 변경
     def _prepare_ml_inputs(self, df, features, scaler, is_training=False):
         data_scaled = scaler.transform(df[features])
         if len(data_scaled) <= config.ML_SEQ_LEN: return [], [], []
@@ -176,7 +217,9 @@ class PipelineTrainer:
     def _train_rl(self, df):
         def make_env(): 
             utils.silence_noisy_loggers()
-            return CryptoEnv(df, TradingCore(), precision_df=None, debug=False)
+            # [수정] Monitor 래퍼 추가: 이것이 있어야 TensorBoard에 Reward 그래프가 나옵니다.
+            env = CryptoEnv(df, TradingCore(), precision_df=None, debug=False)
+            return Monitor(env) 
             
         n_envs = self._get_optimal_n_envs()
         env = SubprocVecEnv([make_env for _ in range(n_envs)])
@@ -193,6 +236,7 @@ class PipelineTrainer:
 
     def _run_backtest(self, df, precision_df):
         env = CryptoEnv(df, TradingCore(), precision_df=precision_df, debug=True)
+        # 백테스트용 더미 환경 (Monitor 불필요)
         dummy_env = DummyVecEnv([lambda: env])
         vec_norm_path = os.path.join(self.paths['model'], "vec_normalize.pkl")
         
@@ -241,3 +285,68 @@ class PipelineTrainer:
             plt.savefig(save_path)
             plt.close()
         except: pass
+
+# --------------------------------------------------------------------------
+# 실행부 (Main)
+# --------------------------------------------------------------------------
+if __name__ == "__main__":
+    # [로그 차단] 출력 버퍼 해제
+    sys.stdout.reconfigure(line_buffering=True)
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    
+    # -----------------------------------------------------
+    # Factory Session Check
+    # -----------------------------------------------------
+    factory_sid = os.environ.get('FACTORY_SESSION_ID')
+    sm = config.SessionManager()
+    
+    # TensorBoard Process (나중에 종료하기 위해 변수 선언)
+    tb_process = None
+
+    try:
+        if factory_sid:
+            # 1. Factory 모드
+            sm.session_id = factory_sid
+            sm.log_dir = os.path.join(config.LOG_BASE_DIR, factory_sid)
+            sm.model_dir = os.path.join(config.MODEL_BASE_DIR, factory_sid)
+            sm.tensorboard_dir = os.path.join(sm.log_dir, "tb_logs")
+            
+            paths = {
+                'id': sm.session_id,
+                'root': sm.log_dir,
+                'tb': sm.tensorboard_dir,
+                'model': sm.model_dir,
+                'log_file': os.path.join(sm.log_dir, 'trainer.log')
+            }
+            print(f"🔗 Linked to Factory Session: {factory_sid}")
+            
+        else:
+            # 2. 단독 실행 모드
+            paths = sm.create()
+            print(f"🆕 Created New Session: {paths['id']}")
+            
+            # 단독 실행일 때만 TensorBoard 자동 실행 (Factory 중복 실행 방지)
+            # logs 폴더 전체를 바라보게 하여 모든 실험 비교 가능
+            log_root = config.LOG_BASE_DIR
+            tb_process = launch_tensorboard_background(log_root, port=6006)
+
+        # 트레이너 실행
+        trainer = PipelineTrainer(paths)
+        trainer.run_all()
+
+    except KeyboardInterrupt:
+        print("\n🛑 Trainer Interrupted.")
+    except Exception as e:
+        print(f"\n❌ Trainer Crashed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+        
+    finally:
+        # 단독 실행 시 켰던 TensorBoard 종료
+        if tb_process:
+            print("👋 Closing TensorBoard...")
+            tb_process.terminate()
+            
+        # 로그 플러시
+        sys.stdout.flush()

@@ -89,18 +89,18 @@ TARGET_THRESHOLD = 0.005
 # [Model] 모델 하이퍼파라미터
 # ---------------------------------------------------------
 XGB_PARAMS = {
-    'n_estimators': 250,
-    'max_depth': 7,
-    'learning_rate': 0.030,
+    'n_estimators': 350,
+    'max_depth': 8,
+    'learning_rate': 0.0731,
     'n_jobs': -1,
     'random_state': 42,
     'eval_metric': 'mlogloss',
 }
 
 LSTM_PARAMS = {
-    'units_1': 32,
+    'units_1': 128,
     'units_2': 48,
-    'dropout': 0.125
+    'dropout': 0.1377
 }
 
 ML_SEQ_LEN = 60
