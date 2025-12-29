@@ -1,58 +1,48 @@
-# Hybrid AI Trading System (Strategy Factory & Lifecycle Manager)
+# Hierarchical AI Trading System (Model Factory & Strategy Modularization)
 
-이 프로젝트는 **지도 학습**(XGBoost + LSTM)의 예측력과 **전략적 모듈화**(Strategy Pattern), 그리고 **완전 자동화된 생애주기 관리**(Lifecycle Management)를 결합한 지능형 퀀트 트레이딩 시스템입니다.
+이 프로젝트는 **계층적 강화학습(Hierarchical RL)**을 지향하는 차세대 알고리즘 트레이딩 시스템입니다.
+하위 레벨에서는 **지도 학습(XGBoost + LSTM)**과 **규칙 기반(Rule-based)** 전략들이 개별적인 매매를 수행하고, 상위 레벨에서는 **강화 학습(RL Manager)**이 시장 국면(Trend/Range/Panic)을 판단하여 최적의 전략을 선택합니다.
 
-단순한 모델 학습을 넘어, **'시장 국면(Regime)'**에 따라 최적의 전략(추세/횡보/방어)을 선택할 수 있는 구조를 갖추었으며, **Model Factory**를 통해 튜닝 $\rightarrow$ 학습 $\rightarrow$ 검증 $\rightarrow$ 배포의 전 과정을 자동화하여 시스템의 지속적인 우상향을 목표로 합니다.
+또한, **Model Factory**를 통해 모델 학습, 파라미터 튜닝, 성능 검증, 챔피언 승격까지의 전 과정이 **완전 자동화(Full-Automation)**되어 있습니다.
 
 ---
 
 ## 🚀 핵심 경쟁력 (Key Features)
 
-### 1. 전략 모듈화 및 확장성 (Modular Strategy Architecture)
-* **Multi-Strategy Support**: 시장 상황에 따라 유연하게 대응하기 위해 전략을 모듈화하였습니다.
-    * `TrendStrategy`: XGB+LSTM 예측 기반의 추세 추종 + Trailing Stop.
-    * `RangeStrategy`: RSI 및 볼린저 밴드 기반의 박스권 역추세 매매.
-    * `DefenseStrategy`: 하락장 감지 시 현금 비중을 늘리고 숏 포지션만 제한적으로 허용.
-* **Standard Interface**: 모든 전략은 `BaseStrategy` 규격을 따르므로, 새로운 전략을 추가하거나 교체하기 매우 쉽습니다.
+### 1. 전략 모듈화 (Modular Strategy Architecture)
+단일 모델에 의존하지 않고, 시장 상황에 맞는 특화된 전략을 부품처럼 교체할 수 있습니다.
+*   **Trend Strategy**: `Hybrid Learner (XGB+LSTM)`로 추세를 예측하고 `Trailing Stop`으로 수익을 극대화합니다.
+*   **Range Strategy**: RSI 및 볼린저 밴드를 활용하여 횡보장에서 역추세 매매를 수행합니다.
+*   **Defense Strategy**: 하락장 및 급변동 시 현금 비중을 늘리거나 숏 포지션으로 방어합니다.
 
-### 2. 모델 공장 및 생애주기 관리 (Factory & Lifecycle)
-* **Automated Model Factory**: 버튼 하나로 `데이터 수집` $\rightarrow$ `AI 모델 구조 튜닝` $\rightarrow$ `매매 로직 최적화` $\rightarrow$ `성능 검증` 프로세스가 원스톱으로 실행됩니다.
-* **Championship System**: 새로 학습된 모델(Challenger)과 기존 실전 모델(Champion)을 백테스트로 경쟁시킵니다. 도전자가 5% 이상 우수할 경우에만 챔피언을 교체(Promotion)하고 설정을 자동 업데이트합니다.
-* **ConfigManager**: 최적화된 파라미터(TP/SL, 지표 설정 등)를 JSON 파일로 중앙 관리하여, 사람의 개입 없이 시스템이 스스로 진화합니다.
+### 2. 완전 자동화된 모델 공장 (The Model Factory)
+버튼 하나로 다음의 과정이 자동으로 수행됩니다.
+1.  **Teacher Tuning**: AI 모델(XGB/LSTM)의 구조(Layer, Node 등)를 유전 알고리즘(TPE)으로 최적화.
+2.  **Training**: 최적화된 구조로 대용량 데이터를 학습하여 추세 예측 모델 생성.
+3.  **Strategy Tuning**: 학습된 모델을 바탕으로 실전 매매 규칙(TP/SL, 진입 임계값)을 시뮬레이션하여 최적화.
+4.  **Championship**: 기존 챔피언 모델과 새로운 도전자 모델을 경쟁(Battle)시켜, 승리한 모델을 실전 봇에 자동 배포.
 
-### 3. 고성능 하이브리드 AI (Hybrid Intelligence)
-* **Teacher (Trend Predictor)**: XGBoost(정형 데이터 패턴)와 LSTM(시계열 흐름)을 앙상블하여 상승/하락/횡보 확률을 정교하게 예측합니다.
-* **Logic Tuner**: AI 예측값이 아무리 좋아도 매매 규칙이 나쁘면 손실이 납니다. `Optuna`를 사용하여 Trailing Gap, 진입 임계값, 익절/손절 비율을 시뮬레이션 기반으로 초고속 최적화합니다.
+### 3. 데이터 무결성 및 고성능 (Integrity & Performance)
+*   **Strict Walk-Forward**: 미래 참조 편향(Look-ahead Bias)을 원천 차단하는 검증 방식을 사용합니다.
+*   **Mixed Precision & Batch Optimization**: 대용량 데이터 학습 시 GPU 메모리 효율과 속도를 극대화했습니다.
+*   **Robust Logging**: 모든 프로세스는 정규화된 로그와 CSV 리포트를 남겨 투명하게 관리됩니다.
 
 ---
 
-## 📂 시스템 구조 (System Structure)
+## 📂 시스템 구조 (Directory Structure)
 
 ```text
 tradingbot/
-├── 📁 configs/                 # [설정] 전략별 파라미터 JSON (ConfigManager 관리)
-├── 📁 core/                    # [핵심] 공통 모듈 (데이터, 유틸, 상수)
-│   ├── config_loader.py        # 설정 파일 I/O
-│   ├── data_processor.py       # 데이터 수집 및 기술적 지표(ADX, RSI 등) 가공
-│   └── constants.py            # 시스템 고정 상수
-├── 📁 strategies/              # [두뇌 1] 매매 전략 모듈 (Logic)
-│   ├── base_strategy.py        # 전략 인터페이스
-│   ├── trend_strategy.py       # 추세추종 전략
-│   └── range_strategy.py       # 횡보장 전략
-├── 📁 execution/               # [몸통] 매매 실행 엔진
-│   └── trade_engine.py         # 전략 선택 및 실행 컨트롤러
-├── 📁 learning/                # [두뇌 2] AI/RL 학습 (Training)
-│   ├── networks.py             # Hybrid Model (XGB+LSTM) 구조
-│   ├── train_worker.py         # 모델 학습 워커
-│   └── evaluator.py            # 모델 성능 평가 및 대결 심판
-├── 📁 tuning/                  # [최적화] Optuna 튜너 (Optimization)
-│   ├── model_tuner.py          # AI 모델 구조 최적화
-│   ├── strategy_tuner.py       # 매매 로직(TP/SL) 최적화
-│   └── rl_tuner.py             # RL 파라미터 최적화 (Phase 3용)
-├── 📁 operations/              # [운영] 자동화 스크립트
-│   ├── model_factory.py        # 전체 파이프라인 가동 공장
-│   └── lifecycle_manager.py    # 챔피언 모델 관리 및 승격
-└── 📁 models_saved/            # 학습된 모델 저장소 (Registry 포함)
+├── 📁 configs/                 # [설정] 전략별 파라미터(JSON) 자동 관리
+├── 📁 core/                    # [핵심] 공통 모듈 (Data, Config, Constants)
+├── 📁 execution/               # [실행] 전략을 선택하고 매매를 수행하는 엔진
+├── 📁 learning/                # [두뇌] AI 모델 구조, 학습 로직, RL 환경
+├── 📁 operations/              # [운영] 공장(Factory), 생애주기(Lifecycle), 스케줄러
+├── 📁 strategies/              # [전략] Trend, Range, Defense 등 개별 전략 구현체
+├── 📁 tuning/                  # [최적화] Optuna 기반의 모델 및 전략 튜너
+├── 📁 data/                    # [데이터] OHLCV 및 가공 데이터 (Parquet)
+├── 📁 logs/                    # [기록] 실행 로그 및 튜닝 결과(CSV)
+└── 📁 models_saved/            # [저장소] 챔피언 모델 및 아카이브
 ```
 
 ---
@@ -60,24 +50,23 @@ tradingbot/
 ## 🗺️ 프로젝트 로드맵 (Roadmap)
 
 ### ✅ Phase 1: 기반 구축 및 안정화 (완료)
-* 데이터 파이프라인(Binance Futures) 및 GPU 가속(Mixed Precision) 적용.
-* Data Leakage 방지(Walk-Forward) 및 클래스 불균형 해결.
+*   데이터 파이프라인(Binance API, Feature Engineering) 구축.
+*   GPU 가속(Mixed Precision) 및 로깅 시스템 표준화.
+*   기본 AI 모델(XGBoost + LSTM) 설계 및 학습 파이프라인 완성.
 
 ### ✅ Phase 2: 모듈화 및 자동화 (완료)
-* **Strategy Pattern 도입**: Trend/Range/Defense 전략 분리 구현.
-* **Model Factory 구축**: 튜닝부터 배포까지 전 과정 자동화 스크립트 완성.
-* **Lifecycle Manager**: 모델 경쟁 및 자동 교체 시스템 구현.
-* **Tuner 고도화**: 전략별 맞춤형 파라미터 최적화(Optuna) 및 JSON 연동.
+*   **Strategy Pattern 도입**: `TradingCore`를 분해하여 확장 가능한 전략 구조 수립.
+*   **Model Factory 구축**: 튜닝 → 학습 → 검증 → 배포의 완전 자동화 구현.
+*   **Lifecycle Manager**: 모델 간 경쟁 시스템 및 챔피언 자동 승격 로직 구현.
+*   **Config Manager**: JSON 기반의 동적 파라미터 관리 시스템 구축.
 
-### 🔜 Phase 3: 지능형 관리자 (RL Manager) 구축 (현재 진행 중)
-* **거시 지표 추가**: ADX(추세강도), 변동성 등 시장 국면 판단용 데이터 추가.
-* **Manager Environment**: 매수/매도가 아닌 **'전략 선택(Select Strategy)'**을 행동으로 하는 강화학습 환경 구축.
-* **Meta-RL 학습**: 하위 전략들을 적재적소에 배치하여 포트폴리오 안정성을 높이는 상위 관리자 AI 개발.
+### 🔜 Phase 3: 지능형 관리자 (RL Manager) (진행 예정)
+*   **Manager Environment**: 하위 전략을 Action으로 선택하는 강화학습 환경 구축.
+*   **Meta-Learning**: 시장 국면(변동성, 추세 강도 등)에 따라 전략을 스위칭하는 상위 에이전트 학습.
 
-### 🔜 Phase 4: 실전 투입 (Live Deployment)
-* **Exchange API**: `ccxt`를 이용한 실시간 주문 집행 모듈(`LiveBot`) 개발.
-* **Paper Trading**: 바이낸스 테스트넷 연동 및 슬리피지/체결 오차 검증.
-* **Safety Guard**: API 오류 처리, 쿨다운, 비상 정지(Circuit Breaker) 로직 탑재.
+### 🔜 Phase 4: 실전 투입 (Deployment)
+*   **Live Bot Implementation**: 바이낸스 API 연동 및 실시간 구동 스크립트 작성.
+*   **Paper Trading**: Testnet 환경에서의 모의 투자 및 슬리피지/수수료 검증.
 
 ---
 
