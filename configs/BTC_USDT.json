@@ -1,0 +1,47 @@
+{
+    "symbol": "BTC/USDT",
+    "last_updated": "init",
+    "strategy_trend": {
+        "active": true,
+        "xgb_params": {
+            "n_estimators": 150,
+            "max_depth": 3,
+            "lr": 0.01606837219687561,
+            "subsample": 0.8023424258240034,
+            "colsample": 0.7738786149479995,
+            "n_jobs": -1,
+            "random_state": 42,
+            "eval_metric": "mlogloss"
+        },
+        "lstm_params": {
+            "units_1": 80,
+            "units_2": 48,
+            "dropout": 0.2261060898352313
+        },
+        "trading_rules": {
+            "threshold_entry": 0.2,
+            "tp_rate": 0.12,
+            "sl_rate": 0.016
+        },
+        "indicators": {
+            "window": 12,
+            "threshold": 0.005
+        },
+        "model_path": "/home/rlarudfhrdesk/tradingbot/models_saved/strategy_trend/champion",
+        "model_score": 243.72587474994134,
+        "last_updated": "2025-12-17 13:04:16"
+    },
+    "strategy_range": {
+        "active": false,
+        "rsi_period": 14,
+        "rsi_lower": 30,
+        "rsi_upper": 70,
+        "bb_window": 20,
+        "tp_rate": 0.01,
+        "sl_rate": 0.01
+    },
+    "rl_manager": {
+        "model_path": null,
+        "lookback_window": 24
+    }
+}

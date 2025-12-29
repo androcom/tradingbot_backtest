@@ -24,15 +24,13 @@ SYSTEM = {
 }
 
 # ---------------------------------------------------------
-# [Path] 경로 설정 (수정됨)
+# [Path] 경로 설정
 # ---------------------------------------------------------
-# 1. 현재 파일(config.py)이 있는 위치: .../tradingbot/core
+# 현재 파일(core/constants.py) 위치 기준 루트 경로 계산
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# 2. 프로젝트 루트 경로: .../tradingbot (한 단계 위로 이동)
 BASE_DIR = os.path.dirname(CURRENT_DIR)
 
-# 3. 하위 폴더 설정 (이제 루트 기준으로 생성됨)
+# 하위 폴더 설정
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 LOG_BASE_DIR = os.path.join(BASE_DIR, 'logs')
 MODEL_BASE_DIR = os.path.join(BASE_DIR, 'models_saved')
@@ -44,7 +42,7 @@ class SessionManager:
     def __init__(self):
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_dir = os.path.join(LOG_BASE_DIR, self.session_id)
-        self.model_dir = os.path.join(MODEL_BASE_DIR, self.session_id) # 학습된 모델은 여기 저장됨
+        self.model_dir = os.path.join(MODEL_BASE_DIR, self.session_id) 
         self.tensorboard_dir = os.path.join(self.log_dir, "tb_logs")
 
     def create(self):
@@ -86,7 +84,7 @@ LOOK_AHEAD_STEPS = 1
 TARGET_THRESHOLD = 0.005     
 
 # ---------------------------------------------------------
-# [Model] 모델 하이퍼파라미터
+# [Model] 모델 하이퍼파라미터 (기본값)
 # ---------------------------------------------------------
 XGB_PARAMS = {
     'n_estimators': 350,
@@ -107,7 +105,7 @@ ML_SEQ_LEN = 60
 ML_EPOCHS = 150
 ML_BATCH_SIZE = 1024
 
-# [RL Reward Params] - Phase 3 최적화 결과 (2025-12-11 업데이트)
+# [RL Reward Params]
 REWARD_PARAMS = {
     'profit_scale': 100,
     'teacher_bonus': 0.086,
@@ -119,7 +117,7 @@ REWARD_PARAMS = {
 # [RL PPO Params]
 RL_TOTAL_TIMESTEPS = 10_000_000 
 RL_PPO_PARAMS = {
-    'learning_rate': 1.74e-5, # 최적화된 값
+    'learning_rate': 1.74e-5,
     'n_steps': 4096,
     'batch_size': 2048,
     'n_epochs': 10,
@@ -133,7 +131,7 @@ RL_PPO_PARAMS = {
 }
 
 # ---------------------------------------------------------
-# [Trading] 거래 규칙 (Logic Optimization 대상)
+# [Trading] 거래 규칙 기본값
 # ---------------------------------------------------------
 INITIAL_BALANCE = 10000.0
 MAX_LEVERAGE = 20

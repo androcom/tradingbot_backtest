@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core import config
+from core import constants as config
 
 import webbrowser
 import tensorflow as tf
@@ -9,8 +9,8 @@ from tensorflow.keras import mixed_precision # type: ignore
 from tensorboard import program
 
 from core import utils
-from core.config import SessionManager
-from pipelines.trainer import PipelineTrainer
+from core.constants import SessionManager
+from learning.train_worker import PipelineTrainer
 
 # 1. 노이즈 차단 (Utils 활용)
 utils.silence_noisy_loggers()

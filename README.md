@@ -1,58 +1,83 @@
-# Hybrid AI Trading Bot (ML + RL + Optimization)
+# Hybrid AI Trading System (Strategy Factory & Lifecycle Manager)
 
-이 프로젝트는 **지도 학습**(XGBoost + LSTM)의 예측력과 **강화 학습**(PPO)의 판단력, 그리고 **수학적 최적화**(Optuna)를 결합한 차세대 알고리즘 트레이딩 시스템입니다.
+이 프로젝트는 **지도 학습**(XGBoost + LSTM)의 예측력과 **전략적 모듈화**(Strategy Pattern), 그리고 **완전 자동화된 생애주기 관리**(Lifecycle Management)를 결합한 지능형 퀀트 트레이딩 시스템입니다.
 
-단순한 과거 데이터 학습을 넘어, **Walk-Forward Validation**(전진 분석)을 통해 미래 참조 편향을 제거하고, **MTF**(Multi-Timeframe) 분석으로 추세를 추종하며, **Optuna**를 통해 매매 규칙을 정밀하게 튜닝하여 실전 수익률을 극대화하도록 설계되었습니다.
+단순한 모델 학습을 넘어, **'시장 국면(Regime)'**에 따라 최적의 전략(추세/횡보/방어)을 선택할 수 있는 구조를 갖추었으며, **Model Factory**를 통해 튜닝 $\rightarrow$ 학습 $\rightarrow$ 검증 $\rightarrow$ 배포의 전 과정을 자동화하여 시스템의 지속적인 우상향을 목표로 합니다.
 
 ---
 
-## 🚀 핵심 경쟁력 (Key Features) *수정 필요*
+## 🚀 핵심 경쟁력 (Key Features)
 
-### 1. 무결성 학습 시스템 (Integrity Learning)
-* **Walk-Forward Validation**: 학습 과정에서 ML 모델이 미래 데이터를 미리 보는(Look-ahead Bias) 문제를 원천 차단하기 위해 **K-Fold 교차 검증** 방식으로 '정직한(Honest)' 예측 신호를 생성하여 RL에게 제공합니다.
-* **Teacher-Student Architecture**: Teacher(ML)가 시장의 확률을 계산하면, Student(RL)가 자금 상황과 리스크를 고려해 최종 진입 여부를 결정합니다.
+### 1. 전략 모듈화 및 확장성 (Modular Strategy Architecture)
+* **Multi-Strategy Support**: 시장 상황에 따라 유연하게 대응하기 위해 전략을 모듈화하였습니다.
+    * `TrendStrategy`: XGB+LSTM 예측 기반의 추세 추종 + Trailing Stop.
+    * `RangeStrategy`: RSI 및 볼린저 밴드 기반의 박스권 역추세 매매.
+    * `DefenseStrategy`: 하락장 감지 시 현금 비중을 늘리고 숏 포지션만 제한적으로 허용.
+* **Standard Interface**: 모든 전략은 `BaseStrategy` 규격을 따르므로, 새로운 전략을 추가하거나 교체하기 매우 쉽습니다.
 
-### 2. 고도화된 전략 엔진 (Advanced Strategy Engine)
-* **MTF Trend Filter**: 1시간봉(Main) 매매 시 4시간봉(Aux)의 EMA 추세를 참조하여 역추세 매매를 필터링합니다.
-* **Dynamic Risk Sizing**: 고정 레버리지를 사용하지 않고, ATR 기반 손절폭에 따라 **자산의 1%~2% 리스크**만 감수하도록 진입 물량을 자동 조절합니다.
-* **Smart Trailing Stop**: Optuna로 최적화된 `Trigger` 및 `Gap` 파라미터를 사용하여 수익을 길게 가져가면서도 급락 시 이익을 보존합니다.
+### 2. 모델 공장 및 생애주기 관리 (Factory & Lifecycle)
+* **Automated Model Factory**: 버튼 하나로 `데이터 수집` $\rightarrow$ `AI 모델 구조 튜닝` $\rightarrow$ `매매 로직 최적화` $\rightarrow$ `성능 검증` 프로세스가 원스톱으로 실행됩니다.
+* **Championship System**: 새로 학습된 모델(Challenger)과 기존 실전 모델(Champion)을 백테스트로 경쟁시킵니다. 도전자가 5% 이상 우수할 경우에만 챔피언을 교체(Promotion)하고 설정을 자동 업데이트합니다.
+* **ConfigManager**: 최적화된 파라미터(TP/SL, 지표 설정 등)를 JSON 파일로 중앙 관리하여, 사람의 개입 없이 시스템이 스스로 진화합니다.
 
-### 3. 하이퍼파라미터 자동 최적화 (Auto-Optimization)
-* **ML Optimization**: `Active Ratio(매매 빈도)` 제약 조건을 적용하여, 과적합되지 않으면서도 충분한 매매 기회를 포착하는 최적의 지표 설정값을 찾아냅니다.
-* **Logic Optimization**: 학습된 모델을 고정한 채, 시뮬레이션을 통해 손절폭, 익절 타이밍, 트레일링 간격 등의 매매 규칙(Rule)만을 초고속으로 최적화합니다.
+### 3. 고성능 하이브리드 AI (Hybrid Intelligence)
+* **Teacher (Trend Predictor)**: XGBoost(정형 데이터 패턴)와 LSTM(시계열 흐름)을 앙상블하여 상승/하락/횡보 확률을 정교하게 예측합니다.
+* **Logic Tuner**: AI 예측값이 아무리 좋아도 매매 규칙이 나쁘면 손실이 납니다. `Optuna`를 사용하여 Trailing Gap, 진입 임계값, 익절/손절 비율을 시뮬레이션 기반으로 초고속 최적화합니다.
 
 ---
 
 ## 📂 시스템 구조 (System Structure)
 
 ```text
-수정 중
+tradingbot/
+├── 📁 configs/                 # [설정] 전략별 파라미터 JSON (ConfigManager 관리)
+├── 📁 core/                    # [핵심] 공통 모듈 (데이터, 유틸, 상수)
+│   ├── config_loader.py        # 설정 파일 I/O
+│   ├── data_processor.py       # 데이터 수집 및 기술적 지표(ADX, RSI 등) 가공
+│   └── constants.py            # 시스템 고정 상수
+├── 📁 strategies/              # [두뇌 1] 매매 전략 모듈 (Logic)
+│   ├── base_strategy.py        # 전략 인터페이스
+│   ├── trend_strategy.py       # 추세추종 전략
+│   └── range_strategy.py       # 횡보장 전략
+├── 📁 execution/               # [몸통] 매매 실행 엔진
+│   └── trade_engine.py         # 전략 선택 및 실행 컨트롤러
+├── 📁 learning/                # [두뇌 2] AI/RL 학습 (Training)
+│   ├── networks.py             # Hybrid Model (XGB+LSTM) 구조
+│   ├── train_worker.py         # 모델 학습 워커
+│   └── evaluator.py            # 모델 성능 평가 및 대결 심판
+├── 📁 tuning/                  # [최적화] Optuna 튜너 (Optimization)
+│   ├── model_tuner.py          # AI 모델 구조 최적화
+│   ├── strategy_tuner.py       # 매매 로직(TP/SL) 최적화
+│   └── rl_tuner.py             # RL 파라미터 최적화 (Phase 3용)
+├── 📁 operations/              # [운영] 자동화 스크립트
+│   ├── model_factory.py        # 전체 파이프라인 가동 공장
+│   └── lifecycle_manager.py    # 챔피언 모델 관리 및 승격
+└── 📁 models_saved/            # 학습된 모델 저장소 (Registry 포함)
 ```
+
 ---
 
 ## 🗺️ 프로젝트 로드맵 (Roadmap)
 
-### ✅ Phase 1 ~ 3: 기반 구축 및 논리적 결함 제거 (완료 / *내용 수정 중*)
-* 데이터 파이프라인 구축 (Binance API, Feature Engineering).
-* GPU 가속 환경 설정 (CUDA 세팅).
-* 기본 ML(Teacher) + RL(Student) 구조 설계.
-* Data Leakage 해결: K-Fold 및 MTF Shift 로직 적용.
-* Class Imbalance 해결: Target Threshold 최적화를 통해 Hold 비율 80% → 48%로 정상화.
-* Reward Hacking 해결: 거래 회피 방지를 위한 보상 함수(Penalty/Bonus) 수정.
+### ✅ Phase 1: 기반 구축 및 안정화 (완료)
+* 데이터 파이프라인(Binance Futures) 및 GPU 가속(Mixed Precision) 적용.
+* Data Leakage 방지(Walk-Forward) 및 클래스 불균형 해결.
 
-### 🔜 Phase 4: 성능 고도화 (현재 진행 중)
-* Optuna Full Optimization: 반복 연산을 통해 전체 파라미터에 대한 최적 조합 확인.
-* 지표 다변화 : 시장 심리 지수, 거시 경제 데이터 추가 테스트.
+### ✅ Phase 2: 모듈화 및 자동화 (완료)
+* **Strategy Pattern 도입**: Trend/Range/Defense 전략 분리 구현.
+* **Model Factory 구축**: 튜닝부터 배포까지 전 과정 자동화 스크립트 완성.
+* **Lifecycle Manager**: 모델 경쟁 및 자동 교체 시스템 구현.
+* **Tuner 고도화**: 전략별 맞춤형 파라미터 최적화(Optuna) 및 JSON 연동.
 
-### 🔜 Phase 5: 확장 및 실전
-* **Paper Trading**: 바이낸스 테스트넷에서 실시간 가동 확인 (체결 오차 및 슬리피지 검증).
-* **Multi-Coin**: BTC 외 메이저 알트코인으로 포트폴리오 다각화.
-* **Live Deployment**: 바이낸스 API 연동 및 실시간 텔레그램 봇 구동.
+### 🔜 Phase 3: 지능형 관리자 (RL Manager) 구축 (현재 진행 중)
+* **거시 지표 추가**: ADX(추세강도), 변동성 등 시장 국면 판단용 데이터 추가.
+* **Manager Environment**: 매수/매도가 아닌 **'전략 선택(Select Strategy)'**을 행동으로 하는 강화학습 환경 구축.
+* **Meta-RL 학습**: 하위 전략들을 적재적소에 배치하여 포트폴리오 안정성을 높이는 상위 관리자 AI 개발.
 
----
-
-## 📊 성능 리포트 (Latest Status)
-*Phase 4 완료 후 추가*
+### 🔜 Phase 4: 실전 투입 (Live Deployment)
+* **Exchange API**: `ccxt`를 이용한 실시간 주문 집행 모듈(`LiveBot`) 개발.
+* **Paper Trading**: 바이낸스 테스트넷 연동 및 슬리피지/체결 오차 검증.
+* **Safety Guard**: API 오류 처리, 쿨다운, 비상 정지(Circuit Breaker) 로직 탑재.
 
 ---
 
